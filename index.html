@@ -1,0 +1,510 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The Singer Who Would Not Stop</title>
+<style>
+  :root{
+    --sky:#79c4e6; --sky2:#a9dcf0;
+    --grass:#6fb94f; --grass2:#5aa33e;
+    --dirt:#8b5a2b; --dirt2:#724821;
+    --skin:#f4c9a6; --skin2:#e3b48d;
+    --paper:#f3ead4;
+    --gold:#e8c25a; --gold2:#caa033; --egblue:#2a4a8b;
+    --concrete:#9a9a9a; --concrete2:#7d7d7d;
+    --rocket:#d94f4f; --flame:#ffb43d;
+    --space:#0b0e1a; --moon:#d9d9d9; --moon2:#bcbcbc;
+    --ink:#1c1c1c;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;background:#15110d;color:#f3ead4;
+    font-family:"Trebuchet MS","Segoe UI",system-ui,sans-serif;}
+  .wrap{max-width:920px;margin:0 auto;padding:18px 14px 40px;}
+  h1{font-family:"Arial Black",Impact,system-ui,sans-serif;
+    text-transform:uppercase;letter-spacing:.5px;font-size:clamp(20px,4.4vw,34px);
+    margin:.2em 0 .1em;color:#ffe08a;text-shadow:3px 3px 0 #000;}
+  .sub{margin:0 0 14px;color:#c8b98f;font-style:italic;font-size:14px;}
+
+  /* ---- The film stage ---- */
+  .stage{position:relative;width:100%;aspect-ratio:16/9;border-radius:10px;
+    overflow:hidden;background:var(--sky);
+    box-shadow:0 12px 0 #000, 0 0 0 4px #000, 0 18px 30px rgba(0,0,0,.5);}
+  .scene{position:absolute;inset:0;opacity:0;visibility:hidden;
+    transition:opacity .4s ease;}
+  .scene.on{opacity:1;visibility:visible;}
+
+  .sky{position:absolute;inset:0;background:linear-gradient(var(--sky2),var(--sky));}
+  .ground{position:absolute;left:0;right:0;bottom:0;height:34%;
+    background:var(--grass);border-top:6px solid var(--grass2);}
+  .ground.dirt{background:var(--dirt);border-top-color:var(--dirt2);}
+  .cloud{position:absolute;background:#fff;border-radius:50px;filter:drop-shadow(2px 3px 0 rgba(0,0,0,.08));}
+  .cloud::before,.cloud::after{content:"";position:absolute;background:#fff;border-radius:50%;}
+
+  /* cut-out paper edge feel */
+  .paper{filter:drop-shadow(2px 3px 0 rgba(0,0,0,.18));}
+
+  /* characters */
+  .char{position:absolute;bottom:34%;}
+  .crowd{position:absolute;bottom:34%;}
+  .obj{position:absolute;}
+
+  /* mouth flap on the singer */
+  @keyframes flap{0%,100%{transform:scaleY(.35)}50%{transform:scaleY(1)}}
+  .singing .mouth{animation:flap .26s steps(2,end) infinite;transform-origin:center;}
+  /* little body bob */
+  @keyframes bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-4px)}}
+  .singing .bobs{animation:bob .9s ease-in-out infinite;}
+
+  /* speech bubble */
+  .bubble{position:absolute;background:#fff;color:var(--ink);border:3px solid #000;
+    border-radius:12px;padding:7px 11px;font-weight:bold;font-size:clamp(11px,1.8vw,15px);
+    white-space:nowrap;box-shadow:3px 4px 0 rgba(0,0,0,.25);}
+  .bubble::after{content:"";position:absolute;left:24px;bottom:-13px;
+    border:8px solid transparent;border-top-color:#000;}
+  .bubble::before{content:"";position:absolute;left:26px;bottom:-8px;z-index:1;
+    border:6px solid transparent;border-top-color:#fff;}
+  .shout{background:#ffd23f;}
+
+  /* notes layer */
+  .notes{position:absolute;inset:0;pointer-events:none;overflow:hidden;}
+  .note{position:absolute;font-size:22px;color:#222;opacity:0;
+    text-shadow:1px 1px 0 #fff;}
+  @keyframes rise{
+    0%{opacity:0;transform:translate(0,0) rotate(0)}
+    12%{opacity:1}
+    100%{opacity:0;transform:translate(var(--dx),-160px) rotate(var(--rot))}
+  }
+  .note.go{animation:rise var(--dur) ease-out forwards;}
+
+  /* screen shake */
+  @keyframes shake{
+    0%,100%{transform:translate(0,0)}
+    20%{transform:translate(-6px,4px)}
+    40%{transform:translate(6px,-3px)}
+    60%{transform:translate(-4px,2px)}
+    80%{transform:translate(4px,-2px)}
+  }
+  .shake{animation:shake .5s linear;}
+
+  /* anvil drop */
+  @keyframes drop{0%{top:-40%}70%{top:38%}80%{top:32%}100%{top:35%}}
+  .anvil.drop{animation:drop .85s cubic-bezier(.5,0,.9,1) forwards;}
+
+  /* rocket launch */
+  @keyframes launch{0%{transform:translateY(0)}30%{transform:translateY(8px)}
+    100%{transform:translateY(-130%)}}
+  .rocket.go{animation:launch 2.2s cubic-bezier(.45,0,.9,1) forwards;}
+  @keyframes flick{0%,100%{transform:scaleY(1)}50%{transform:scaleY(.6)}}
+  .flame{transform-origin:top center;animation:flick .12s steps(2) infinite;}
+
+  /* moon drift */
+  @keyframes twinkle{0%,100%{opacity:.3}50%{opacity:1}}
+  .star{position:absolute;width:3px;height:3px;background:#fff;border-radius:50%;
+    animation:twinkle 2s ease-in-out infinite;}
+
+  /* caption bar */
+  .caption{position:absolute;left:0;right:0;bottom:0;padding:10px 16px 14px;
+    background:linear-gradient(transparent,rgba(0,0,0,.78));
+    color:#fff;font-size:clamp(13px,2.3vw,18px);font-weight:600;
+    text-shadow:1px 2px 0 #000;min-height:40px;}
+
+  /* big start/replay overlay */
+  .overlay{position:absolute;inset:0;display:flex;flex-direction:column;
+    align-items:center;justify-content:center;gap:14px;
+    background:rgba(7,9,14,.74);z-index:30;}
+  .overlay.hide{display:none;}
+  .btn{font-family:"Arial Black",Impact,sans-serif;text-transform:uppercase;
+    letter-spacing:1px;background:#ffd23f;color:#1c1c1c;border:4px solid #000;
+    border-radius:10px;padding:14px 26px;font-size:18px;cursor:pointer;
+    box-shadow:0 6px 0 #000;transition:transform .05s,box-shadow .05s;}
+  .btn:hover{transform:translateY(2px);box-shadow:0 4px 0 #000;}
+  .btn:active{transform:translateY(6px);box-shadow:0 0 0 #000;}
+  .ovtext{color:#ffe08a;font-family:"Arial Black",Impact,sans-serif;
+    font-size:clamp(20px,4vw,30px);text-shadow:3px 3px 0 #000;text-align:center;}
+
+  /* control bar */
+  .controls{display:flex;gap:10px;align-items:center;flex-wrap:wrap;
+    margin-top:14px;}
+  .ctl{background:#2a2118;color:#f3ead4;border:2px solid #5a4a36;border-radius:8px;
+    padding:9px 14px;font-weight:bold;cursor:pointer;font-size:14px;}
+  .ctl:hover{background:#3a2e22;}
+  .scenebar{display:flex;gap:5px;margin-left:auto;}
+  .dot{width:13px;height:13px;border-radius:50%;background:#4a3c2c;border:2px solid #2a2118;cursor:pointer;}
+  .dot.active{background:#ffd23f;}
+  .hint{color:#9a8a6c;font-size:12px;margin-top:10px;}
+
+  @media (prefers-reduced-motion: reduce){
+    .shake,.singing .bobs{animation:none !important;}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>The Singer Who Would Not Stop</h1>
+  <p class="sub">Egy népdalénekes balladája — a South Park–stílusú rövidfilm</p>
+
+  <div class="stage" id="stage">
+    <!-- scenes injected here -->
+    <div class="notes" id="notes"></div>
+    <div class="caption" id="caption"></div>
+    <div class="overlay" id="overlay">
+      <div class="ovtext" id="ovtext">A folk ballad in 9 scenes</div>
+      <button class="btn" id="startBtn">▶ Play the film</button>
+    </div>
+  </div>
+
+  <div class="controls">
+    <button class="ctl" id="replay">↻ Replay</button>
+    <button class="ctl" id="mute">🔊 Sound: on</button>
+    <div class="scenebar" id="scenebar"></div>
+  </div>
+  <p class="hint">Tip: keep the volume up — the whole joke is that you can still hear him.</p>
+</div>
+
+<script>
+/* ============ SVG building blocks (construction-paper cut-outs) ============ */
+function singer(extraClass){
+  return `<g class="singerbody ${extraClass||''}">
+    <g class="bobs">
+      <!-- legs -->
+      <rect x="40" y="150" width="16" height="34" rx="6" fill="#3a4a7a" class="paper"/>
+      <rect x="64" y="150" width="16" height="34" rx="6" fill="#3a4a7a" class="paper"/>
+      <rect x="36" y="180" width="26" height="12" rx="5" fill="#2a2018" class="paper"/>
+      <rect x="58" y="180" width="26" height="12" rx="5" fill="#2a2018" class="paper"/>
+      <!-- body / folk vest -->
+      <rect x="34" y="100" width="52" height="58" rx="14" fill="#c63a32" class="paper"/>
+      <rect x="50" y="100" width="20" height="58" fill="#f3ead4"/>
+      <circle cx="60" cy="118" r="3" fill="#2a2018"/>
+      <circle cx="60" cy="132" r="3" fill="#2a2018"/>
+      <!-- arms -->
+      <rect x="22" y="104" width="14" height="40" rx="7" fill="#c63a32" class="paper"/>
+      <rect x="84" y="104" width="14" height="40" rx="7" fill="#c63a32" class="paper"/>
+      <circle cx="29" cy="146" r="8" fill="var(--skin)"/>
+      <circle cx="91" cy="146" r="8" fill="var(--skin)"/>
+      <!-- head -->
+      <ellipse cx="60" cy="66" rx="40" ry="42" fill="var(--skin)" class="paper"/>
+      <!-- little folk hat -->
+      <path d="M22 50 Q60 20 98 50 L98 56 L22 56 Z" fill="#1c1c1c" class="paper"/>
+      <rect x="40" y="34" width="40" height="20" rx="8" fill="#1c1c1c"/>
+      <rect x="44" y="48" width="32" height="6" fill="#c63a32"/>
+      <!-- eyes -->
+      <ellipse cx="48" cy="62" rx="13" ry="15" fill="#fff" stroke="#000" stroke-width="2"/>
+      <ellipse cx="72" cy="62" rx="13" ry="15" fill="#fff" stroke="#000" stroke-width="2"/>
+      <circle cx="50" cy="64" r="4" fill="#000"/>
+      <circle cx="70" cy="64" r="4" fill="#000"/>
+      <!-- mustache -->
+      <path d="M44 88 Q60 96 76 88" stroke="#5a3a1a" stroke-width="6" fill="none" stroke-linecap="round"/>
+      <!-- singing mouth -->
+      <ellipse class="mouth" cx="60" cy="92" rx="10" ry="9" fill="#7a1c1c"/>
+    </g></g>`;
+}
+function crowdGuy(x, color, angry){
+  const eyes = angry
+    ? `<path d="M30 56 L46 62" stroke="#000" stroke-width="3"/><path d="M70 62 L86 56" stroke="#000" stroke-width="3"/>
+       <ellipse cx="42" cy="64" rx="11" ry="12" fill="#fff" stroke="#000" stroke-width="2"/>
+       <ellipse cx="74" cy="64" rx="11" ry="12" fill="#fff" stroke="#000" stroke-width="2"/>
+       <circle cx="44" cy="66" r="4" fill="#000"/><circle cx="72" cy="66" r="4" fill="#000"/>`
+    : `<ellipse cx="42" cy="62" rx="11" ry="13" fill="#fff" stroke="#000" stroke-width="2"/>
+       <ellipse cx="74" cy="62" rx="11" ry="13" fill="#fff" stroke="#000" stroke-width="2"/>
+       <circle cx="42" cy="64" r="4" fill="#000"/><circle cx="74" cy="64" r="4" fill="#000"/>`;
+  const mouth = angry
+    ? `<path d="M44 90 Q58 80 74 90" stroke="#000" stroke-width="4" fill="none"/>`
+    : `<path d="M48 88 Q58 92 68 88" stroke="#000" stroke-width="3" fill="none"/>`;
+  return `<g transform="translate(${x},0)">
+    <rect x="36" y="148" width="16" height="32" rx="6" fill="#444" class="paper"/>
+    <rect x="64" y="148" width="16" height="32" rx="6" fill="#444" class="paper"/>
+    <rect x="32" y="98" width="54" height="56" rx="13" fill="${color}" class="paper"/>
+    <rect x="20" y="100" width="14" height="44" rx="7" fill="${color}" class="paper"/>
+    <rect x="84" y="100" width="14" height="44" rx="7" fill="${color}" class="paper"/>
+    <circle cx="27" cy="146" r="8" fill="var(--skin2)"/>
+    <circle cx="91" cy="146" r="8" fill="var(--skin2)"/>
+    <ellipse cx="58" cy="64" rx="38" ry="40" fill="var(--skin2)" class="paper"/>
+    ${eyes}${mouth}
+  </g>`;
+}
+function anvilSVG(){
+  return `<svg viewBox="0 0 200 140" width="220" style="overflow:visible">
+    <path d="M20 30 L180 30 L165 60 L120 64 L120 92 L150 92 L150 110 L50 110 L50 92 L80 92 L80 64 L35 60 Z"
+      fill="#3b3b42" class="paper"/>
+    <rect x="10" y="22" width="180" height="14" rx="4" fill="#4a4a52"/>
+    <text x="100" y="86" text-anchor="middle" font-family="Arial Black" font-size="16" fill="#8a8a92">A BIG, BIG SOMETHING</text>
+  </svg>`;
+}
+function egyptSVG(){
+  return `<svg viewBox="0 0 130 220" width="120">
+    <path d="M65 6 C20 6 18 70 18 120 C18 180 30 214 65 214 C100 214 112 180 112 120 C112 70 110 6 65 6 Z"
+      fill="var(--gold)" stroke="var(--gold2)" stroke-width="4" class="paper"/>
+    <path d="M40 30 Q65 16 90 30 L90 70 Q65 60 40 70 Z" fill="var(--egblue)"/>
+    <ellipse cx="65" cy="78" rx="22" ry="26" fill="var(--skin)"/>
+    <ellipse cx="56" cy="76" rx="5" ry="6" fill="#fff" stroke="#000"/><circle cx="57" cy="78" r="2.5"/>
+    <ellipse cx="74" cy="76" rx="5" ry="6" fill="#fff" stroke="#000"/><circle cx="73" cy="78" r="2.5"/>
+    <path d="M52 92 Q65 88 78 92" stroke="#000" stroke-width="2.5" fill="none"/>
+    <rect x="28" y="110" width="74" height="9" fill="var(--egblue)"/>
+    <rect x="28" y="128" width="74" height="9" fill="#c0392b"/>
+    <path d="M46 150 L65 168 L84 150" stroke="var(--egblue)" stroke-width="6" fill="none"/>
+    <rect x="28" y="180" width="74" height="9" fill="var(--egblue)"/>
+  </svg>`;
+}
+function chernobylSVG(){
+  return `<svg viewBox="0 0 280 180" width="240">
+    <path d="M10 175 L10 90 Q140 -10 270 90 L270 175 Z" fill="var(--concrete)" stroke="var(--concrete2)" stroke-width="4" class="paper"/>
+    <path d="M10 110 L270 110" stroke="var(--concrete2)" stroke-width="3"/>
+    <path d="M10 140 L270 140" stroke="var(--concrete2)" stroke-width="3"/>
+    <path d="M70 90 L70 175 M140 60 L140 175 M210 90 L210 175" stroke="var(--concrete2)" stroke-width="3"/>
+    <g transform="translate(140,95)">
+      <circle r="26" fill="#f4d000"/><circle r="6" fill="#1c1c1c"/>
+      <path d="M0 0 L13 -22 A26 26 0 0 1 13 22 Z" fill="#1c1c1c" transform="rotate(0)"/>
+      <path d="M0 0 L13 -22 A26 26 0 0 1 13 22 Z" fill="#1c1c1c" transform="rotate(120)"/>
+      <path d="M0 0 L13 -22 A26 26 0 0 1 13 22 Z" fill="#1c1c1c" transform="rotate(240)"/>
+      <circle r="7" fill="#f4d000"/>
+    </g>
+  </svg>`;
+}
+function rocketSVG(){
+  return `<svg viewBox="0 0 120 260" width="120">
+    <path d="M60 4 C90 40 92 120 92 180 L28 180 C28 120 30 40 60 4 Z" fill="var(--rocket)" stroke="#a32a2a" stroke-width="3" class="paper"/>
+    <circle cx="60" cy="70" r="16" fill="#bfe6ff" stroke="#3a6a8a" stroke-width="4"/>
+    <path d="M28 150 L6 200 L28 188 Z" fill="#a32a2a"/>
+    <path d="M92 150 L114 200 L92 188 Z" fill="#a32a2a"/>
+    <rect x="44" y="180" width="32" height="14" fill="#7d2020"/>
+    <g class="flame" style="transform-origin:60px 194px">
+      <path d="M44 194 Q60 250 76 194 Q60 214 44 194 Z" fill="var(--flame)"/>
+      <path d="M52 194 Q60 230 68 194 Q60 208 52 194 Z" fill="#ffe46b"/>
+    </g>
+  </svg>`;
+}
+
+/* ============ Build the scenes ============ */
+const stage = document.getElementById('stage');
+const notesLayer = document.getElementById('notes');
+const captionEl = document.getElementById('caption');
+
+const skyClouds = `<div class="cloud" style="width:90px;height:34px;top:14%;left:12%"></div>
+  <div class="cloud" style="width:70px;height:28px;top:24%;left:60%"></div>`;
+
+const scenes = [
+  { cap:"Once upon a time, there was a singer of old Hungarian folk songs.",
+    mouth:{x:'14%',y:'30%'}, html:`
+    <div class="sky">${skyClouds}</div><div class="ground"></div>
+    <svg class="char singing" style="left:10%;width:120px" viewBox="0 0 120 192" id="s1">${singer()}</svg>
+    <div class="bubble" style="left:20%;top:18%">🎵 Tavaszi szél vizet áraszt… 🎵</div>` },
+
+  { cap:"Some people… really did not care for his singing.",
+    mouth:{x:'14%',y:'30%'}, html:`
+    <div class="sky">${skyClouds}</div><div class="ground"></div>
+    <svg class="char singing" style="left:8%;width:110px" viewBox="0 0 120 192">${singer()}</svg>
+    <svg class="crowd" style="right:30%;width:100px" viewBox="0 0 120 192">${crowdGuy(0,'#2e7d32',true)}</svg>
+    <svg class="crowd" style="right:12%;width:100px" viewBox="0 0 120 192">${crowdGuy(0,'#5a3a8a',true)}</svg>
+    <div class="bubble shout" style="right:14%;top:16%">ENOUGH! 😡</div>` },
+
+  { cap:"So they dropped something big on him. Something very big.",
+    mouth:{x:'46%',y:'42%'}, shake:true, html:`
+    <div class="sky">${skyClouds}</div><div class="ground"></div>
+    <svg class="char singing" style="left:40%;width:110px" viewBox="0 0 120 192">${singer()}</svg>
+    <div class="obj anvil drop" style="left:38%;">${anvilSVG()}</div>` },
+
+  { cap:"He fell to the floor. But he did not stop singing.",
+    mouth:{x:'40%',y:'62%'}, html:`
+    <div class="sky">${skyClouds}</div><div class="ground"></div>
+    <svg class="char singing" style="left:30%;bottom:30%;width:150px;transform:rotate(86deg)" viewBox="0 0 120 192">${singer()}</svg>
+    <div class="bubble" style="left:48%;top:46%">🎵 …virágom, virágom… 🎵</div>` },
+
+  { cap:"They buried him deep, deep in the ground.",
+    mouth:{x:'50%',y:'74%'}, html:`
+    <div class="sky">${skyClouds}</div><div class="ground dirt"></div>
+    <svg viewBox="0 0 200 80" style="position:absolute;left:40%;bottom:28%;width:160px">
+      <path d="M10 70 Q100 0 190 70 Z" fill="var(--dirt2)" class="paper"/>
+    </svg>
+    <svg viewBox="0 0 60 80" style="position:absolute;left:48%;bottom:40%;width:48px">
+      <rect x="14" y="20" width="32" height="50" rx="6" fill="#cfcfcf" stroke="#888" stroke-width="3"/>
+      <rect x="6" y="10" width="48" height="16" rx="6" fill="#cfcfcf" stroke="#888" stroke-width="3"/>
+      <text x="30" y="50" text-anchor="middle" font-size="11" font-family="Arial">♪R.I.P♪</text>
+    </svg>` },
+
+  { cap:"They sealed him inside a sarcophagus all the way from Egypt.",
+    mouth:{x:'50%',y:'58%'}, html:`
+    <div class="sky">${skyClouds}</div><div class="ground dirt"></div>
+    <svg viewBox="0 0 200 80" style="position:absolute;left:38%;bottom:24%;width:180px">
+      <path d="M10 70 Q100 0 190 70 Z" fill="var(--dirt2)" class="paper"/>
+    </svg>
+    <div class="obj" style="left:44%;bottom:30%">${egyptSVG()}</div>
+    <svg viewBox="0 0 60 60" style="position:absolute;right:16%;bottom:42%;width:46px">
+      <path d="M30 4 L56 56 L4 56 Z" fill="#e8c25a" stroke="#caa033" stroke-width="3"/>
+    </svg>` },
+
+  { cap:"And then — the concrete sarcophagus from Chernobyl.",
+    mouth:{x:'50%',y:'56%'}, html:`
+    <div class="sky" style="background:linear-gradient(#bcae8a,#8a8a8a)"></div>
+    <div class="ground dirt" style="background:#5a4a3a"></div>
+    <div class="obj" style="left:38%;bottom:30%">${chernobylSVG()}</div>` },
+
+  { cap:"Still not enough. So they strapped him to a rocket and launched him to the Moon.",
+    mouth:{x:'46%',y:'70%'}, html:`
+    <div class="sky" style="background:linear-gradient(#0b0e1a,#3a4a7a)"></div>
+    <div class="ground" style="background:#3a3a3a;border-top-color:#222"></div>
+    <div class="obj rocket go" style="left:40%;bottom:30%">${rocketSVG()}</div>` },
+
+  { cap:"And yet… if you listen very closely… you can still hear him.",
+    mouth:{x:'50%',y:'40%'}, moon:true, html:`
+    <div class="sky" style="background:radial-gradient(circle at 70% 30%, #1a2240, var(--space))"></div>
+    <div id="starfield"></div>
+    <!-- Earth in the distance -->
+    <svg viewBox="0 0 100 100" style="position:absolute;left:8%;top:14%;width:70px">
+      <circle cx="50" cy="50" r="44" fill="#2a6acb"/>
+      <path d="M20 40 Q40 30 55 45 Q70 55 50 70 Q35 60 20 40 Z" fill="#3fae5a"/>
+    </svg>
+    <!-- Moon -->
+    <svg viewBox="0 0 400 200" style="position:absolute;left:0;right:0;bottom:0;width:100%">
+      <path d="M0 200 L0 120 Q200 40 400 120 L400 200 Z" fill="var(--moon)"/>
+      <circle cx="90" cy="135" r="12" fill="var(--moon2)"/>
+      <circle cx="250" cy="120" r="9" fill="var(--moon2)"/>
+      <circle cx="330" cy="150" r="14" fill="var(--moon2)"/>
+    </svg>
+    <!-- The whole stack sitting on the moon -->
+    <div style="position:absolute;left:46%;bottom:30%;transform:scale(.6);transform-origin:bottom center">${chernobylSVG()}</div>
+    <div class="bubble" style="left:50%;top:30%">🎵 …virágom… 🎵</div>` },
+];
+
+/* scene dots */
+const scenebar = document.getElementById('scenebar');
+scenes.forEach((_,i)=>{
+  const d=document.createElement('div'); d.className='dot'; d.dataset.i=i;
+  d.onclick=()=>{ stopTimers(); goTo(i,false); };
+  scenebar.appendChild(d);
+});
+const dots=[...scenebar.children];
+
+/* ============ Music: a folk tune that never stops (just gets muffled) ============ */
+let audioCtx, master, lowpass, melodyTimer, muted=false, audioReady=false;
+const A4=440,C5=523.25,D5=587.33,E5=659.25,G5=783.99;
+const melody=[ // [freq, beats]
+  [A4,1],[C5,1],[D5,1],[E5,1], [E5,1],[D5,1],[C5,1],[A4,1],
+  [C5,1],[D5,1],[E5,1],[G5,1], [E5,1],[D5,1],[C5,2],[0,1]
+];
+const beat=0.34;
+let mIndex=0;
+
+function initAudio(){
+  if(audioReady) return;
+  audioCtx=new (window.AudioContext||window.webkitAudioContext)();
+  master=audioCtx.createGain(); master.gain.value=0.0;
+  lowpass=audioCtx.createBiquadFilter(); lowpass.type='lowpass';
+  lowpass.frequency.value=8000;
+  master.connect(lowpass); lowpass.connect(audioCtx.destination);
+  audioReady=true;
+  scheduleNext();
+}
+function playNote(freq,dur){
+  if(!freq){return;}
+  const o=audioCtx.createOscillator(); const g=audioCtx.createGain();
+  o.type='triangle'; o.frequency.value=freq;
+  const o2=audioCtx.createOscillator(); o2.type='square'; o2.frequency.value=freq;
+  const g2=audioCtx.createGain(); g2.gain.value=0.18;
+  const t=audioCtx.currentTime;
+  g.gain.setValueAtTime(0.0001,t);
+  g.gain.exponentialRampToValueAtTime(0.5,t+0.03);
+  g.gain.exponentialRampToValueAtTime(0.0001,t+dur*0.95);
+  o.connect(g); o2.connect(g2); g2.connect(g); g.connect(master);
+  o.start(t); o2.start(t); o.stop(t+dur); o2.stop(t+dur);
+}
+function scheduleNext(){
+  if(!audioReady) return;
+  const [f,b]=melody[mIndex];
+  playNote(f,beat*b*0.9);
+  mIndex=(mIndex+1)%melody.length;
+  melodyTimer=setTimeout(scheduleNext, beat*b*1000);
+}
+/* muffle level: 0 = clear & loud, higher = more buried */
+function setMuffle(level){
+  if(!audioReady) return;
+  const t=audioCtx.currentTime;
+  const vol = muted?0:[0.6,0.6,0.42,0.5,0.34,0.26,0.16,0.5,0.22][level] ?? 0.4;
+  const freq= [9000,9000,2200,6000,1400,900,520,7000,1300][level] ?? 4000;
+  master.gain.linearRampToValueAtTime(vol,t+0.5);
+  lowpass.frequency.linearRampToValueAtTime(freq,t+0.5);
+}
+
+/* ============ Notes emitter (visual) ============ */
+let noteTimer;
+const glyphs=['♪','♫','🎵','♩','🎶'];
+function emitNote(xPct,yPct){
+  const n=document.createElement('div'); n.className='note';
+  n.textContent=glyphs[Math.floor(Math.random()*glyphs.length)];
+  n.style.left=`calc(${xPct} + ${(Math.random()*40-20)}px)`;
+  n.style.top=yPct;
+  n.style.setProperty('--dx',(Math.random()*120-60)+'px');
+  n.style.setProperty('--rot',(Math.random()*60-30)+'deg');
+  n.style.setProperty('--dur',(1.6+Math.random()*1.2)+'s');
+  notesLayer.appendChild(n);
+  requestAnimationFrame(()=>n.classList.add('go'));
+  setTimeout(()=>n.remove(),3200);
+}
+function startNotes(xPct,yPct){
+  clearInterval(noteTimer);
+  noteTimer=setInterval(()=>emitNote(xPct,yPct), 520);
+}
+
+/* ============ Scene player ============ */
+let sceneTimer, current=-1, playing=false;
+const SCENE_MS=4200;
+
+function renderScene(i){
+  const s=scenes[i];
+  // remove old scene element (keep notes + caption + overlay)
+  const old=stage.querySelector('.scene'); if(old) old.remove();
+  const div=document.createElement('div');
+  div.className='scene'; div.innerHTML=s.html;
+  stage.insertBefore(div, notesLayer);
+  requestAnimationFrame(()=>div.classList.add('on'));
+
+  if(s.shake){ stage.classList.remove('shake'); void stage.offsetWidth; stage.classList.add('shake'); }
+  if(s.moon){
+    const sf=div.querySelector('#starfield');
+    if(sf){ for(let k=0;k<40;k++){const st=document.createElement('div');st.className='star';
+      st.style.left=Math.random()*100+'%';st.style.top=Math.random()*65+'%';
+      st.style.animationDelay=Math.random()*2+'s';sf.appendChild(st);} }
+  }
+  captionEl.textContent=s.cap;
+  startNotes(s.mouth.x, s.mouth.y);
+  setMuffle(i);
+  dots.forEach((d,k)=>d.classList.toggle('active',k===i));
+  current=i;
+}
+
+function goTo(i, autoAdvance=true){
+  if(i>=scenes.length){ // end
+    playing=false;
+    document.getElementById('ovtext').textContent="🎵 …and somewhere, he is still singing. 🎵";
+    document.getElementById('startBtn').textContent="↻ Watch again";
+    document.getElementById('overlay').classList.remove('hide');
+    clearInterval(noteTimer);
+    if(audioReady){ master.gain.linearRampToValueAtTime(0.18, audioCtx.currentTime+1);}
+    return;
+  }
+  renderScene(i);
+  if(autoAdvance && playing){
+    clearTimeout(sceneTimer);
+    sceneTimer=setTimeout(()=>goTo(i+1,true), SCENE_MS);
+  }
+}
+function stopTimers(){ clearTimeout(sceneTimer); playing=false; }
+
+function startFilm(){
+  document.getElementById('overlay').classList.add('hide');
+  initAudio();
+  if(audioCtx.state==='suspended') audioCtx.resume();
+  playing=true; mIndex=0;
+  goTo(0,true);
+}
+
+/* ============ Controls ============ */
+document.getElementById('startBtn').onclick=startFilm;
+document.getElementById('replay').onclick=()=>{ stopTimers(); startFilm(); };
+document.getElementById('mute').onclick=(e)=>{
+  muted=!muted; e.target.textContent= muted? '🔇 Sound: off':'🔊 Sound: on';
+  if(audioReady) setMuffle(current<0?0:current);
+};
+</script>
+</body>
+</html>
