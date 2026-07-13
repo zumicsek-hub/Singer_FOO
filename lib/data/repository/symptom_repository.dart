@@ -39,6 +39,12 @@ class SymptomRepository {
         );
   }
 
+  /// GDPR törléshez: a beteg összes tünet-/motoros naplóbejegyzésének
+  /// törlése.
+  Future<void> deleteAllForPatient(String patientId) {
+    return (_db.delete(_db.symptomLogs)..where((t) => t.patientId.equals(patientId))).go();
+  }
+
   SymptomLog _fromRow(db.SymptomLog row) => SymptomLog(
         id: row.id,
         patientId: row.patientId,

@@ -29,6 +29,28 @@ class MedicationRepository {
     return rows.map(_medicationFromRow).toList();
   }
 
+  /// Aktív és inaktív (törölt) gyógyszerek is — export/riport készítéshez,
+  /// ahol a korábban töröltek nevére is szükség lehet a régi naplósorokhoz.
+  Future<List<Medication>> getAllMedicationsIncludingInactive(String patientId) async {
+    final query = _db.select(_db.medications)
+      ..where((t) => t.patientId.equals(patientId))
+      ..orderBy([(t) => OrderingTerm.asc(t.createdAt)]);
+    final rows = await query.get();
+    return rows.map(_medicationFromRow).toList();
+  }
+
+  /// A beteg összes bevételi naplóbejegyzése, nem csak a mai nap — export/
+  /// riport készítéshez (brief §3.4, §8 adathordozhatóság).
+  Future<List<MedicationIntakeLog>> getAllIntakeLogs(String patientId) async {
+    final query = _db.select(_db.medicationIntakeLogs).join([
+      innerJoin(_db.medications, _db.medications.id.equalsExp(_db.medicationIntakeLogs.medicationId)),
+    ])
+      ..where(_db.medications.patientId.equals(patientId))
+      ..orderBy([OrderingTerm.asc(_db.medicationIntakeLogs.scheduledTime)]);
+    final rows = await query.get();
+    return rows.map((row) => _intakeLogFromRow(row.readTable(_db.medicationIntakeLogs))).toList();
+  }
+
   Future<Medication> addMedication({
     required String patientId,
     required String name,
@@ -359,6 +381,40 @@ class MedicationRepository {
       confirmedAt: Value(confirmedAt),
       confirmedByUserId: Value(confirmedByUserId),
     ));
+  }
+
+  /// GDPR törléshez (brief §8: „adattörlés"): a beteg összes gyógyszerhez
+  /// kötött adata — bevételi naplók, ütemtervek/időpontok, fehérjeablakok,
+  /// maguk a gyógyszerek — véglegesen törlődik.
+  Future<void> deleteAllForPatient(String patientId) async {
+    final medicationIds = (await (_db.select(_db.medications)
+              ..where((t) => t.patientId.equals(patientId)))
+            .get())
+        .map((m) => m.id)
+        .toList();
+    if (medicationIds.isEmpty) return;
+
+    final scheduleIds = (await (_db.select(_db.medicationSchedules)
+              ..where((t) => t.medicationId.isIn(medicationIds)))
+            .get())
+        .map((s) => s.id)
+        .toList();
+
+    await (_db.delete(_db.medicationIntakeLogs)
+          ..where((t) => t.medicationId.isIn(medicationIds)))
+        .go();
+    if (scheduleIds.isNotEmpty) {
+      await (_db.delete(_db.medicationScheduleTimes)
+            ..where((t) => t.scheduleId.isIn(scheduleIds)))
+          .go();
+    }
+    await (_db.delete(_db.medicationSchedules)
+          ..where((t) => t.medicationId.isIn(medicationIds)))
+        .go();
+    await (_db.delete(_db.proteinRestrictionWindows)
+          ..where((t) => t.medicationId.isIn(medicationIds)))
+        .go();
+    await (_db.delete(_db.medications)..where((t) => t.patientId.equals(patientId))).go();
   }
 
   Medication _medicationFromRow(db.Medication row) => Medication(

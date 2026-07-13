@@ -54,6 +54,14 @@ class PatientRepository {
     ));
   }
 
+  /// GDPR törléshez: a beteg profil- és értesítési beállítás-adatainak
+  /// törlése.
+  Future<void> deleteAllForPatient(String patientId) async {
+    await (_db.delete(_db.notificationPreferences)..where((t) => t.patientId.equals(patientId)))
+        .go();
+    await (_db.delete(_db.patientProfiles)..where((t) => t.id.equals(patientId))).go();
+  }
+
   PatientProfile _profileFromRow(db.PatientProfile row) => PatientProfile(
         id: row.id,
         userId: row.userId,

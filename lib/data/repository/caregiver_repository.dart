@@ -78,6 +78,22 @@ class CaregiverRepository {
         .write(db.ConsentGrantsCompanion(revokedAt: Value(DateTime.now())));
   }
 
+  /// GDPR törléshez: a beteghez tartozó összes hozzájárulás és a hozzájuk
+  /// tartozó gondozói profilok törlése.
+  Future<void> deleteAllForPatient(String patientId) async {
+    final caregiverIds = (await (_db.select(_db.consentGrants)
+              ..where((t) => t.patientId.equals(patientId)))
+            .get())
+        .map((g) => g.caregiverId)
+        .toSet()
+        .toList();
+
+    await (_db.delete(_db.consentGrants)..where((t) => t.patientId.equals(patientId))).go();
+    if (caregiverIds.isNotEmpty) {
+      await (_db.delete(_db.caregiverProfiles)..where((t) => t.id.isIn(caregiverIds))).go();
+    }
+  }
+
   CaregiverProfile _caregiverFromRow(db.CaregiverProfile row) => CaregiverProfile(
         id: row.id,
         userId: row.userId,

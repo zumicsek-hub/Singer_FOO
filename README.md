@@ -42,6 +42,13 @@ nem lett kipróbálva.
   „Bevettem"/„Később" műveletgombok előtér- és háttér-feldolgozással
   (`background_handler.dart`), Android pontos ébresztés / iOS Critical
   Alerts engedélykérés
+- `lib/data/export/csv_export.dart` — a gyógyszernapló CSV riportjának
+  előállítása (tiszta függvény, I/O nélkül); a Beállítások képernyő ebből
+  épít fájlt és nyitja meg a natív megosztás-párbeszédet (`share_plus`) —
+  brief §3.4 „exportálható riport" és §8 GDPR adathordozhatóság
+- minden repository kapott egy `deleteAllForPatient` metódust
+  (`AppRepositories.deleteAllPatientData` fogja össze) a Beállítások „Fiók
+  és adatok törlése" GDPR-törléséhez
 - `lib/data/mock_data.dart` — csak a statikus katalógustartalom (segédeszköz-
   és edukációs listák), amelyek nem felhasználói adatok
 - `lib/screens/` — a brief §4-ben felsorolt 11 képernyő, a fenti

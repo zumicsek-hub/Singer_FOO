@@ -55,4 +55,15 @@ class AppRepositories {
       );
     }
   }
+
+  /// GDPR törléshez (brief §8 „adattörlés"): a beteg minden adatát törli az
+  /// összes táblából. A beütemezett OS-értesítések lemondása a hívó
+  /// felelőssége (lásd SettingsScreen — a repository-réteg szándékosan nem
+  /// függ az értesítési rétegtől).
+  Future<void> deleteAllPatientData() async {
+    await medications.deleteAllForPatient(patientId);
+    await caregivers.deleteAllForPatient(patientId);
+    await symptoms.deleteAllForPatient(patientId);
+    await patient.deleteAllForPatient(patientId);
+  }
 }

@@ -1,5 +1,11 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
+
 import '../data/app_repositories.dart';
+import '../data/export/csv_export.dart';
 import '../data/repository_scope.dart';
 import '../models/models.dart';
 import '../notifications/notification_service.dart';
@@ -11,8 +17,78 @@ import 'medication_list_screen.dart';
 import 'watch_intake_screen.dart';
 
 /// 10. Beállítások.
-class SettingsScreen extends StatelessWidget {
+class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
+
+  @override
+  State<SettingsScreen> createState() => _SettingsScreenState();
+}
+
+class _SettingsScreenState extends State<SettingsScreen> {
+  bool _exporting = false;
+  bool _deleting = false;
+
+  Future<void> _exportData(AppRepositories repos) async {
+    setState(() => _exporting = true);
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final medications =
+          await repos.medications.getAllMedicationsIncludingInactive(AppRepositories.patientId);
+      final logs = await repos.medications.getAllIntakeLogs(AppRepositories.patientId);
+      if (logs.isEmpty) {
+        messenger.showSnackBar(
+          const SnackBar(content: Text('Nincs még exportálható bevételi adat.')),
+        );
+        return;
+      }
+      final csv = buildIntakeLogCsv(medications, logs);
+      final dir = await getTemporaryDirectory();
+      final file = File('${dir.path}/gyogyszernaplo.csv');
+      await file.writeAsString(csv);
+      await SharePlus.instance.share(ShareParams(
+        files: [XFile(file.path)],
+        subject: 'Gyógyszernapló export',
+        text: 'Gyógyszernapló export a Parkinson Társ alkalmazásból.',
+      ));
+    } finally {
+      if (mounted) setState(() => _exporting = false);
+    }
+  }
+
+  Future<void> _deleteAllData(AppRepositories repos) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Fiók és adatok törlése'),
+        content: const Text(
+          'Ez véglegesen törli a gyógyszereidet, a bevételi és tünetnaplódat, '
+          'valamint a hozzátartozói hozzáféréseket erről a készülékről. A '
+          'művelet nem vonható vissza. (Mivel ehhez a vázlathoz még nincs '
+          'önálló regisztráció, az app újraindításkor minta-adatokkal töltődik '
+          'fel újra.)',
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: const Text('Mégse')),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: Theme.of(ctx).colorScheme.error),
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Végleges törlés'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    setState(() => _deleting = true);
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      await NotificationService.instance.cancelAll();
+      await repos.deleteAllPatientData();
+      messenger.showSnackBar(const SnackBar(content: Text('Az adatok törölve.')));
+    } finally {
+      if (mounted) setState(() => _deleting = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -203,17 +279,29 @@ class SettingsScreen extends StatelessWidget {
                       children: [
                         ListTile(
                           contentPadding: EdgeInsets.zero,
-                          leading: const Icon(Icons.download_outlined),
-                          title: const Text('Adatok exportálása (PDF/CSV)'),
+                          leading: _exporting
+                              ? const SizedBox(
+                                  width: 24,
+                                  height: 24,
+                                  child: CircularProgressIndicator(strokeWidth: 2),
+                                )
+                              : const Icon(Icons.download_outlined),
+                          title: const Text('Gyógyszernapló exportálása (CSV)'),
                           trailing: const Icon(Icons.chevron_right),
-                          onTap: () {},
+                          onTap: _exporting ? null : () => _exportData(repos),
                         ),
                         ListTile(
                           contentPadding: EdgeInsets.zero,
-                          leading: const Icon(Icons.delete_outline),
+                          leading: _deleting
+                              ? const SizedBox(
+                                  width: 24,
+                                  height: 24,
+                                  child: CircularProgressIndicator(strokeWidth: 2),
+                                )
+                              : const Icon(Icons.delete_outline),
                           title: const Text('Fiók és adatok törlése'),
                           trailing: const Icon(Icons.chevron_right),
-                          onTap: () {},
+                          onTap: _deleting ? null : () => _deleteAllData(repos),
                         ),
                       ],
                     ),

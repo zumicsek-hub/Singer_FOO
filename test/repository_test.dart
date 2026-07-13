@@ -111,6 +111,29 @@ void main() {
     final profile = await repos.patient.watchProfile(AppRepositories.patientId).first;
     expect(profile!.simplifiedModeEnabled, isTrue);
 
+    // Export lekérdezések: a teljes (nem csak mai) napló és a deaktivált
+    // gyógyszereket is tartalmazó lista is elérhető riportkészítéshez.
+    final allMedications =
+        await repos.medications.getAllMedicationsIncludingInactive(AppRepositories.patientId);
+    expect(allMedications.any((m) => m.id == added.id), isTrue);
+    final allLogs = await repos.medications.getAllIntakeLogs(AppRepositories.patientId);
+    expect(allLogs.length, greaterThanOrEqualTo(logsAfterReschedule.length));
+
+    // GDPR törlés: minden, a beteghez kötött adat eltűnik minden táblából.
+    await repos.deleteAllPatientData();
+    expect(await repos.medications.getActiveMedications(AppRepositories.patientId), isEmpty);
+    expect(
+      await repos.medications.getAllMedicationsIncludingInactive(AppRepositories.patientId),
+      isEmpty,
+    );
+    expect(await repos.medications.getTodayIntakeLogs(AppRepositories.patientId), isEmpty);
+    expect(await repos.caregivers.getCaregivers(AppRepositories.patientId), isEmpty);
+    expect(
+      await repos.symptoms.watchRecentLogs(AppRepositories.patientId).first,
+      isEmpty,
+    );
+    expect(await repos.patient.watchProfile(AppRepositories.patientId).first, isNull);
+
     await repos.database.close();
   });
 }

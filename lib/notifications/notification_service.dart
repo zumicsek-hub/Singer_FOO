@@ -166,6 +166,10 @@ class NotificationService {
     }
   }
 
+  /// Minden beütemezett/megjelenített értesítés lemondása — a beteg adatainak
+  /// teljes törlésekor (brief §8 GDPR „adattörlés") használt.
+  Future<void> cancelAll() => _plugin.cancelAll();
+
   /// A „Később emlékeztess" választás után: törli a még ki nem küldött
   /// eszkalációs szinteket, és egyetlen új emlékeztetőt ütemez
   /// `repeatIntervalMinutes` múlva (nem az eredeti dózisidőponthoz képest).
