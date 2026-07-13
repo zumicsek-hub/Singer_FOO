@@ -35,6 +35,18 @@ void main() {
     expect(medsAfter.length, 4);
     expect(medsAfter.any((m) => m.id == added.id), isTrue);
 
+    // A frissen hozzáadott gyógyszerhez ütemtervet rendelünk (AddMedicationScreen
+    // "Napi bevételi időpontok" lépése), majd ellenőrizzük, hogy a napi napló-
+    // generálás valóban létrehozza hozzá a mai bejegyzést.
+    await repos.medications.setSchedule(
+      medicationId: added.id,
+      dailyTimes: const [DailyTime(8, 0), DailyTime(20, 0)],
+    );
+    await repos.medications.ensureTodayIntakeLogsGenerated(AppRepositories.patientId);
+    final logsAfterSchedule =
+        await repos.medications.watchTodayIntakeLogs(AppRepositories.patientId).first;
+    expect(logsAfterSchedule.where((l) => l.medicationId == added.id).length, 2);
+
     await repos.caregivers.inviteCaregiver(
       patientId: AppRepositories.patientId,
       relationshipToPatient: 'Teszt gondozó',

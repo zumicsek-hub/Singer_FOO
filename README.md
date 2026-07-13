@@ -65,9 +65,10 @@ nem lett kipróbálva.
   környezetben (nincs Xcode/macOS) nem lehetett biztonságosan szerkeszteni
 - Hitelesítés és jogosultságkezelés (RBAC), audit log tényleges írása
 - Natív Wear OS / Apple Watch cél (a 11. képernyő csak telefonos előnézet)
-- Gyógyszer-ütemterv szerkesztő UI (az Add medication képernyő szándékosan
-  nem kér időpontokat, lásd brief §5 megjegyzés) — emiatt új gyógyszerhez
-  egyelőre nem generálódik automatikus emlékeztető, amíg nincs ütemterve
+- Meglévő gyógyszer szerkesztése/törlése (csak új gyógyszer hozzáadása és a
+  hozzá tartozó napi időpontok megadása működik; az Add medication
+  képernyőn a „Napi bevételi időpontok" szakasz mentéskor létrehozza az
+  ütemtervet, a mai naplóbejegyzéseket és az emlékeztető-értesítéseket is)
 
 ## Fejlesztői parancsok
 
