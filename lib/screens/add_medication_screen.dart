@@ -1,10 +1,18 @@
 import 'package:flutter/material.dart';
+import '../data/app_repositories.dart';
+import '../data/repository_scope.dart';
 import '../models/models.dart';
+import '../notifications/notification_service.dart';
+import '../notifications/scheduling.dart';
 import '../widgets/primary_action_button.dart';
 
 /// 5. Gyógyszer hozzáadása — minimális gépelés, egyértelmű mezők.
+/// [existing] megadása esetén szerkesztő módban nyílik meg (Gyógyszereim
+/// listából), előtöltve a jelenlegi adatokkal és ütemezéssel.
 class AddMedicationScreen extends StatefulWidget {
-  const AddMedicationScreen({super.key});
+  final Medication? existing;
+
+  const AddMedicationScreen({super.key, this.existing});
 
   @override
   State<AddMedicationScreen> createState() => _AddMedicationScreenState();
@@ -12,13 +20,50 @@ class AddMedicationScreen extends StatefulWidget {
 
 class _AddMedicationScreenState extends State<AddMedicationScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _nameController = TextEditingController();
-  final _dosageController = TextEditingController();
-  final _noteController = TextEditingController();
+  late final TextEditingController _nameController;
+  late final TextEditingController _dosageController;
+  late final TextEditingController _noteController;
 
-  MedicationForm _form = MedicationForm.tablet;
-  bool _proteinRuleEnabled = false;
-  bool _isRescueDose = false;
+  late MedicationForm _form;
+  late bool _proteinRuleEnabled;
+  late bool _isRescueDose;
+  final List<DailyTime> _doseTimes = [];
+  bool _saving = false;
+  bool _loadingSchedule = false;
+
+  bool get _isEditing => widget.existing != null;
+  bool _scheduleLoadStarted = false;
+
+  @override
+  void initState() {
+    super.initState();
+    final existing = widget.existing;
+    _nameController = TextEditingController(text: existing?.name ?? '');
+    _dosageController = TextEditingController(text: existing?.dosage ?? '');
+    _noteController = TextEditingController(text: existing?.note ?? '');
+    _form = existing?.form ?? MedicationForm.tablet;
+    _proteinRuleEnabled = existing?.proteinRuleEnabled ?? false;
+    _isRescueDose = existing?.isRescueDose ?? false;
+    _loadingSchedule = existing != null;
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final existing = widget.existing;
+    if (existing != null && !_scheduleLoadStarted) {
+      _scheduleLoadStarted = true;
+      RepositoryScope.of(context).medications.getSchedule(existing.id).then((schedule) {
+        if (!mounted) return;
+        setState(() {
+          _doseTimes
+            ..clear()
+            ..addAll(schedule?.customTimes ?? const []);
+          _loadingSchedule = false;
+        });
+      });
+    }
+  }
 
   @override
   void dispose() {
@@ -28,10 +73,134 @@ class _AddMedicationScreenState extends State<AddMedicationScreen> {
     super.dispose();
   }
 
+  Future<void> _addDoseTime() async {
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay.now(),
+      helpText: 'Bevétel időpontja',
+    );
+    if (picked == null) return;
+    setState(() {
+      _doseTimes.add(DailyTime(picked.hour, picked.minute));
+      _doseTimes.sort((a, b) =>
+          (a.hour * 60 + a.minute).compareTo(b.hour * 60 + b.minute));
+    });
+  }
+
+  void _removeDoseTime(DailyTime time) {
+    setState(() => _doseTimes.remove(time));
+  }
+
+  Future<void> _save() async {
+    if (_saving) return;
+    if (!_formKey.currentState!.validate()) return;
+
+    setState(() => _saving = true);
+    final repos = RepositoryScope.of(context);
+    final navigator = Navigator.of(context);
+    final messenger = ScaffoldMessenger.of(context);
+
+    final Medication medication;
+    if (_isEditing) {
+      medication = widget.existing!;
+      // A pillanatnyilag beütemezett OS-értesítéseket előbb lemondjuk,
+      // mert az ütemterv módosítása törölheti/cserélheti a hozzájuk
+      // tartozó mai naplóbejegyzéseket (lásd MedicationRepository.setSchedule).
+      final pendingLogIds =
+          await repos.medications.todayUnresolvedLogIdsForMedication(medication.id);
+      for (final logId in pendingLogIds) {
+        await NotificationService.instance.cancelForIntakeLog(logId);
+      }
+      await repos.medications.updateMedication(
+        medicationId: medication.id,
+        name: _nameController.text.trim(),
+        dosage: _dosageController.text.trim(),
+        form: _form,
+        proteinRuleEnabled: _proteinRuleEnabled,
+        isRescueDose: _isRescueDose,
+        note: _noteController.text.trim().isEmpty ? null : _noteController.text.trim(),
+      );
+    } else {
+      medication = await repos.medications.addMedication(
+        patientId: AppRepositories.patientId,
+        name: _nameController.text.trim(),
+        dosage: _dosageController.text.trim(),
+        form: _form,
+        proteinRuleEnabled: _proteinRuleEnabled,
+        isRescueDose: _isRescueDose,
+        note: _noteController.text.trim().isEmpty ? null : _noteController.text.trim(),
+      );
+    }
+
+    if (_doseTimes.isNotEmpty) {
+      await repos.medications.setSchedule(
+        medicationId: medication.id,
+        dailyTimes: _doseTimes,
+      );
+    }
+
+    if (_proteinRuleEnabled) {
+      await repos.medications.setProteinWindow(
+        medicationId: medication.id,
+        hoursBeforeDose: 1,
+        hoursAfterDose: 1,
+        prescribedByPhysician: false,
+        active: true,
+      );
+    }
+
+    await repos.medications.ensureTodayIntakeLogsGenerated(AppRepositories.patientId);
+    await scheduleTodayNotifications(repos);
+
+    if (!mounted) return;
+    navigator.pop();
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(_doseTimes.isEmpty
+            ? 'Gyógyszer mentve. Emlékeztetőhöz adj meg bevételi időpontot.'
+            : 'Gyógyszer és emlékeztető mentve.'),
+      ),
+    );
+  }
+
+  Future<void> _delete() async {
+    final medication = widget.existing;
+    if (medication == null) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Gyógyszer törlése'),
+        content: Text(
+          '„${medication.name}" törlése esetén a jövőbeli emlékeztetői '
+          'megszűnnek. A korábbi bevételi előzmények megmaradnak a '
+          'naplóban.',
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: const Text('Mégse')),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: Theme.of(ctx).colorScheme.error),
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Törlés'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    final repos = RepositoryScope.of(context);
+    final navigator = Navigator.of(context);
+    final logIds = await repos.medications.todayUnresolvedLogIdsForMedication(medication.id);
+    for (final logId in logIds) {
+      await NotificationService.instance.cancelForIntakeLog(logId);
+    }
+    await repos.medications.deactivateMedication(medication.id);
+    navigator.pop();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Gyógyszer hozzáadása')),
+      appBar: AppBar(title: Text(_isEditing ? 'Gyógyszer szerkesztése' : 'Gyógyszer hozzáadása')),
       body: Form(
         key: _formKey,
         child: ListView(
@@ -100,24 +269,59 @@ class _AddMedicationScreenState extends State<AddMedicationScreen> {
               maxLines: 3,
             ),
             const SizedBox(height: 24),
+            Text('Napi bevételi időpontok', style: Theme.of(context).textTheme.titleMedium),
+            const SizedBox(height: 4),
             Text(
-              'Az ütemezés (időpontok, ismétlődés) a mentés után, a következő '
-              'lépésben állítható be.',
+              'Ezek alapján kapod az emlékeztetőket. Időpont nélkül a '
+              'gyógyszer elmentődik, de emlékeztető nélkül marad.',
               style: Theme.of(context).textTheme.bodySmall,
             ),
-            const SizedBox(height: 16),
-            PrimaryActionButton(
-              label: 'Mentés',
-              icon: Icons.save_outlined,
-              onPressed: () {
-                if (_formKey.currentState!.validate()) {
-                  Navigator.of(context).pop();
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Gyógyszer mentve.')),
-                  );
-                }
-              },
+            const SizedBox(height: 12),
+            if (_loadingSchedule)
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 8),
+                child: LinearProgressIndicator(),
+              )
+            else if (_doseTimes.isEmpty)
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 8),
+                child: Text('Még nincs megadva időpont.'),
+              )
+            else
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: _doseTimes
+                    .map((t) => InputChip(
+                          label: Text(t.label),
+                          onDeleted: () => _removeDoseTime(t),
+                        ))
+                    .toList(growable: false),
+              ),
+            const SizedBox(height: 12),
+            OutlinedButton.icon(
+              onPressed: _addDoseTime,
+              icon: const Icon(Icons.add_alarm),
+              label: const Text('Időpont hozzáadása'),
             ),
+            const SizedBox(height: 24),
+            PrimaryActionButton(
+              label: _saving ? 'Mentés…' : 'Mentés',
+              icon: Icons.save_outlined,
+              onPressed: _save,
+            ),
+            if (_isEditing) ...[
+              const SizedBox(height: 12),
+              OutlinedButton.icon(
+                onPressed: _delete,
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: Theme.of(context).colorScheme.error,
+                  side: BorderSide(color: Theme.of(context).colorScheme.error),
+                ),
+                icon: const Icon(Icons.delete_outline),
+                label: const Text('Gyógyszer törlése'),
+              ),
+            ],
           ],
         ),
       ),

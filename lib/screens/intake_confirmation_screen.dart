@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
-import '../data/mock_data.dart';
+import '../data/repository_scope.dart';
 import '../models/models.dart';
+import '../notifications/notification_service.dart';
 import '../widgets/intake_status_view.dart';
 import '../widgets/primary_action_button.dart';
 
@@ -8,8 +9,9 @@ import '../widgets/primary_action_button.dart';
 /// Bevettem / Később emlékeztess / Kihagytam / Segítséget kérek.
 class IntakeConfirmationScreen extends StatefulWidget {
   final MedicationIntakeLog log;
+  final Medication? medication;
 
-  const IntakeConfirmationScreen({super.key, required this.log});
+  const IntakeConfirmationScreen({super.key, required this.log, this.medication});
 
   @override
   State<IntakeConfirmationScreen> createState() =>
@@ -25,8 +27,30 @@ class _IntakeConfirmationScreenState extends State<IntakeConfirmationScreen> {
     _status = widget.log.status;
   }
 
-  void _setStatus(IntakeStatus status, String message) {
+  Future<void> _setStatus(IntakeStatus status, String message) async {
     setState(() => _status = status);
+    final repos = RepositoryScope.of(context);
+    await repos.medications.updateIntakeStatus(
+      logId: widget.log.id,
+      status: status,
+      confirmedAt: status == IntakeStatus.confirmed ? DateTime.now() : null,
+    );
+
+    if (status == IntakeStatus.snoozed && widget.medication != null) {
+      final preference =
+          await repos.patient.getNotificationPreference(widget.medication!.patientId);
+      if (preference != null) {
+        await NotificationService.instance.scheduleSnoozeReminder(
+          log: widget.log,
+          medication: widget.medication!,
+          preference: preference,
+        );
+      }
+    } else {
+      await NotificationService.instance.cancelForIntakeLog(widget.log.id);
+    }
+
+    if (!mounted) return;
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
       ..showSnackBar(SnackBar(content: Text(message)));
@@ -34,7 +58,7 @@ class _IntakeConfirmationScreenState extends State<IntakeConfirmationScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final med = MockData.levodopa;
+    final medName = widget.medication?.name ?? 'Gyógyszer';
     return Scaffold(
       appBar: AppBar(title: const Text('Gyógyszer visszaigazolása')),
       body: SafeArea(
@@ -47,7 +71,7 @@ class _IntakeConfirmationScreenState extends State<IntakeConfirmationScreen> {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Text(med.name, style: Theme.of(context).textTheme.headlineMedium),
+                      Text(medName, style: Theme.of(context).textTheme.headlineMedium),
                       const SizedBox(height: 12),
                       IntakeStatusChip(status: _status),
                     ],
@@ -76,7 +100,7 @@ class _IntakeConfirmationScreenState extends State<IntakeConfirmationScreen> {
                 onPressed: () async {
                   final confirmed = await _confirmSkip(context);
                   if (confirmed) {
-                    _setStatus(IntakeStatus.skipped, 'Rögzítve: kihagyva.');
+                    await _setStatus(IntakeStatus.skipped, 'Rögzítve: kihagyva.');
                   }
                 },
               ),
@@ -88,7 +112,8 @@ class _IntakeConfirmationScreenState extends State<IntakeConfirmationScreen> {
                 foregroundColor: Theme.of(context).colorScheme.onErrorContainer,
                 onPressed: () => _setStatus(
                   IntakeStatus.escalatedToCaregiver,
-                  'Értesítettük a hozzátartozódat.',
+                  'Rögzítve: segítséget kértél. A gondozói értesítés kézbesítése '
+                  'a jelenlegi verzióban még nem valós idejű.',
                 ),
               ),
             ],

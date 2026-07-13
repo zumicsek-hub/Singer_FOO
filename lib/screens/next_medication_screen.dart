@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../data/mock_data.dart';
+import '../models/models.dart';
 import '../widgets/disclaimer_banner.dart';
 import '../widgets/intake_status_view.dart';
 import '../widgets/primary_action_button.dart';
@@ -7,12 +7,14 @@ import 'intake_confirmation_screen.dart';
 
 /// 2. Következő gyógyszer — egyetlen elsődleges művelettel (WCAG-barát).
 class NextMedicationScreen extends StatelessWidget {
-  const NextMedicationScreen({super.key});
+  final MedicationIntakeLog log;
+  final Medication medication;
+
+  const NextMedicationScreen({super.key, required this.log, required this.medication});
 
   @override
   Widget build(BuildContext context) {
-    final next = MockData.nextIntake;
-    final med = MockData.levodopa;
+    final med = medication;
 
     return Scaffold(
       appBar: AppBar(title: const Text('Következő gyógyszer')),
@@ -41,14 +43,14 @@ class NextMedicationScreen extends StatelessWidget {
                       ),
                       const SizedBox(height: 16),
                       Text(
-                        _formatTime(next.scheduledTime),
+                        _formatTime(log.scheduledTime),
                         style: Theme.of(context)
                             .textTheme
                             .displaySmall
                             ?.copyWith(fontWeight: FontWeight.bold),
                       ),
                       const SizedBox(height: 16),
-                      IntakeStatusChip(status: next.status),
+                      IntakeStatusChip(status: log.status),
                       if (med.note != null) ...[
                         const SizedBox(height: 20),
                         Text(
@@ -68,7 +70,7 @@ class NextMedicationScreen extends StatelessWidget {
                 icon: Icons.check_circle_outline,
                 onPressed: () => Navigator.of(context).push(
                   MaterialPageRoute(
-                    builder: (_) => IntakeConfirmationScreen(log: next),
+                    builder: (_) => IntakeConfirmationScreen(log: log, medication: med),
                   ),
                 ),
               ),
