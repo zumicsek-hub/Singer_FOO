@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import '../data/app_repositories.dart';
+import '../data/repository_scope.dart';
 import '../models/models.dart';
 import '../widgets/primary_action_button.dart';
 
@@ -109,10 +111,24 @@ class _AddMedicationScreenState extends State<AddMedicationScreen> {
             PrimaryActionButton(
               label: 'Mentés',
               icon: Icons.save_outlined,
-              onPressed: () {
+              onPressed: () async {
                 if (_formKey.currentState!.validate()) {
-                  Navigator.of(context).pop();
-                  ScaffoldMessenger.of(context).showSnackBar(
+                  final repos = RepositoryScope.of(context);
+                  final navigator = Navigator.of(context);
+                  final messenger = ScaffoldMessenger.of(context);
+                  await repos.medications.addMedication(
+                    patientId: AppRepositories.patientId,
+                    name: _nameController.text.trim(),
+                    dosage: _dosageController.text.trim(),
+                    form: _form,
+                    proteinRuleEnabled: _proteinRuleEnabled,
+                    isRescueDose: _isRescueDose,
+                    note: _noteController.text.trim().isEmpty
+                        ? null
+                        : _noteController.text.trim(),
+                  );
+                  navigator.pop();
+                  messenger.showSnackBar(
                     const SnackBar(content: Text('Gyógyszer mentve.')),
                   );
                 }

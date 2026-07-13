@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
-import '../data/mock_data.dart';
+import '../data/app_repositories.dart';
+import '../data/repository/caregiver_repository.dart';
+import '../data/repository_scope.dart';
 import '../models/models.dart';
 import '../widgets/primary_action_button.dart';
 import '../widgets/section_card.dart';
@@ -13,25 +15,22 @@ class CaregiverInviteScreen extends StatefulWidget {
 }
 
 class _CaregiverInviteScreenState extends State<CaregiverInviteScreen> {
-  late List<ConsentGrant> _grants;
+  final _relationshipController = TextEditingController();
+  final Set<ConsentScope> _selectedScopes = {};
 
   @override
-  void initState() {
-    super.initState();
-    _grants = List.of(MockData.consentGrants);
+  void dispose() {
+    _relationshipController.dispose();
+    super.dispose();
   }
 
-  String _caregiverName(String caregiverId) => MockData.caregivers
-      .firstWhere((c) => c.id == caregiverId)
-      .relationshipToPatient;
-
-  Future<void> _revoke(ConsentGrant grant) async {
+  Future<void> _revoke(BuildContext context, CaregiverWithGrant item) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Hozzáférés visszavonása'),
         content: Text(
-          '${_caregiverName(grant.caregiverId)} hozzáférése azonnal '
+          '${item.caregiver.relationshipToPatient} hozzáférése azonnal '
           'megszűnik, és a visszavonás naplózásra kerül. Bármikor újra '
           'meghívhatod.',
         ),
@@ -45,83 +44,117 @@ class _CaregiverInviteScreenState extends State<CaregiverInviteScreen> {
         ],
       ),
     );
-    if (confirmed == true) {
-      setState(() {
-        _grants = _grants
-            .map((g) => g.id == grant.id
-                ? ConsentGrant(
-                    id: g.id,
-                    patientId: g.patientId,
-                    caregiverId: g.caregiverId,
-                    scopes: g.scopes,
-                    grantedAt: g.grantedAt,
-                    revokedAt: DateTime.now(),
-                  )
-                : g)
-            .toList();
-      });
+    if (confirmed == true && context.mounted) {
+      await RepositoryScope.of(context).caregivers.revokeConsent(item.grant.id);
     }
+  }
+
+  Future<void> _invite(BuildContext context) async {
+    if (_relationshipController.text.trim().isEmpty || _selectedScopes.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Add meg a kapcsolatot és legalább egy jogosultságot.')),
+      );
+      return;
+    }
+    final repos = RepositoryScope.of(context);
+    await repos.caregivers.inviteCaregiver(
+      patientId: AppRepositories.patientId,
+      relationshipToPatient: _relationshipController.text.trim(),
+      scopes: _selectedScopes.toList(),
+    );
+    if (!context.mounted) return;
+    setState(() {
+      _relationshipController.clear();
+      _selectedScopes.clear();
+    });
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Meghívó elküldve.')),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
+    final repos = RepositoryScope.of(context);
     return Scaffold(
       appBar: AppBar(title: const Text('Hozzátartozók')),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          SectionCard(
-            title: 'Meghívott hozzátartozók',
-            child: Column(
-              children: _grants.map((grant) {
-                return ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  leading: const CircleAvatar(child: Icon(Icons.person)),
-                  title: Text(_caregiverName(grant.caregiverId)),
-                  subtitle: Text(grant.isActive
-                      ? _scopeSummary(grant.scopes)
-                      : 'Hozzáférés visszavonva'),
-                  trailing: grant.isActive
-                      ? TextButton(
-                          onPressed: () => _revoke(grant),
-                          child: const Text('Visszavonás'),
-                        )
-                      : const Icon(Icons.block, color: Colors.grey),
-                );
-              }).toList(growable: false),
-            ),
-          ),
-          const SizedBox(height: 16),
-          SectionCard(
-            title: 'Új hozzátartozó meghívása',
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const TextField(
-                  decoration: InputDecoration(
-                    labelText: 'E-mail vagy telefonszám',
-                    border: OutlineInputBorder(),
-                  ),
+      body: StreamBuilder<List<CaregiverWithGrant>>(
+        stream: repos.caregivers.watchCaregivers(AppRepositories.patientId),
+        builder: (context, snapshot) {
+          final items = snapshot.data ?? const <CaregiverWithGrant>[];
+          return ListView(
+            padding: const EdgeInsets.all(16),
+            children: [
+              SectionCard(
+                title: 'Meghívott hozzátartozók',
+                child: items.isEmpty
+                    ? const Text('Még nincs meghívott hozzátartozó.')
+                    : Column(
+                        children: items.map((item) {
+                          return ListTile(
+                            contentPadding: EdgeInsets.zero,
+                            leading: const CircleAvatar(child: Icon(Icons.person)),
+                            title: Text(item.caregiver.relationshipToPatient),
+                            subtitle: Text(item.grant.isActive
+                                ? _scopeSummary(item.grant.scopes)
+                                : 'Hozzáférés visszavonva'),
+                            trailing: item.grant.isActive
+                                ? TextButton(
+                                    onPressed: () => _revoke(context, item),
+                                    child: const Text('Visszavonás'),
+                                  )
+                                : const Icon(Icons.block, color: Colors.grey),
+                          );
+                        }).toList(growable: false),
+                      ),
+              ),
+              const SizedBox(height: 16),
+              SectionCard(
+                title: 'Új hozzátartozó meghívása',
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    TextField(
+                      controller: _relationshipController,
+                      decoration: const InputDecoration(
+                        labelText: 'Kapcsolat (pl. Lánya, Férje)',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Text('Mit láthat?', style: Theme.of(context).textTheme.titleMedium),
+                    _scopeCheckbox('Csak elmulasztott bevételek', ConsentScope.missedDosesOnly),
+                    _scopeCheckbox('Teljes gyógyszernapló', ConsentScope.fullLog),
+                    _scopeCheckbox('Értesítések', ConsentScope.notifications),
+                    _scopeCheckbox('Beállítások szerkesztése', ConsentScope.editSettings),
+                    const SizedBox(height: 16),
+                    PrimaryActionButton(
+                      label: 'Meghívó küldése',
+                      icon: Icons.send_outlined,
+                      onPressed: () => _invite(context),
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 16),
-                Text('Mit láthat?', style: Theme.of(context).textTheme.titleMedium),
-                const _ScopeCheckbox(label: 'Csak elmulasztott bevételek'),
-                const _ScopeCheckbox(label: 'Teljes gyógyszernapló'),
-                const _ScopeCheckbox(label: 'Értesítések'),
-                const _ScopeCheckbox(label: 'Beállítások szerkesztése'),
-                const SizedBox(height: 16),
-                PrimaryActionButton(
-                  label: 'Meghívó küldése',
-                  icon: Icons.send_outlined,
-                  onPressed: () => ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Meghívó elküldve.')),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
+              ),
+            ],
+          );
+        },
       ),
+    );
+  }
+
+  Widget _scopeCheckbox(String label, ConsentScope scope) {
+    return CheckboxListTile(
+      contentPadding: EdgeInsets.zero,
+      value: _selectedScopes.contains(scope),
+      onChanged: (v) => setState(() {
+        if (v ?? false) {
+          _selectedScopes.add(scope);
+        } else {
+          _selectedScopes.remove(scope);
+        }
+      }),
+      title: Text(label),
+      controlAffinity: ListTileControlAffinity.leading,
     );
   }
 
@@ -131,28 +164,4 @@ class _CaregiverInviteScreenState extends State<CaregiverInviteScreen> {
         ConsentScope.notifications => 'Értesítések',
         ConsentScope.editSettings => 'Beállítások szerkesztése',
       }).join(', ');
-}
-
-class _ScopeCheckbox extends StatefulWidget {
-  final String label;
-
-  const _ScopeCheckbox({required this.label});
-
-  @override
-  State<_ScopeCheckbox> createState() => _ScopeCheckboxState();
-}
-
-class _ScopeCheckboxState extends State<_ScopeCheckbox> {
-  bool _checked = false;
-
-  @override
-  Widget build(BuildContext context) {
-    return CheckboxListTile(
-      contentPadding: EdgeInsets.zero,
-      value: _checked,
-      onChanged: (v) => setState(() => _checked = v ?? false),
-      title: Text(widget.label),
-      controlAffinity: ListTileControlAffinity.leading,
-    );
-  }
 }

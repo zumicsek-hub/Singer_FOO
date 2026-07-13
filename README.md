@@ -11,9 +11,10 @@ gyógyszerésszel.
 
 ## Állapot
 
-Ez a jelenlegi kód egy **UI-vázlat (skeleton)**: statikus/mock adatokkal
-működő képernyők, akadálymentes (WCAG 2.2 AA-orientált) elrendezéssel és a
-tervezett adatmodellel — backend, perzisztencia és valós helyi/push
+Ez a jelenlegi kód egy **UI-vázlat (skeleton) valódi helyi perzisztenciával**:
+a képernyők akadálymentes (WCAG 2.2 AA-orientált) elrendezéssel és a
+tervezett adatmodellel dolgoznak, az adatok pedig ténylegesen egy helyi
+SQLite adatbázisban tárolódnak — backend-szinkronizáció és valós helyi/push
 értesítési logika nélkül. A teljes termékspecifikációt lásd a fejlesztői
 briefben.
 
@@ -22,18 +23,29 @@ briefben.
 - `lib/models/` — a brief §5 adatmodell-entitásai (User, PatientProfile,
   Medication, MedicationSchedule, MedicationIntakeLog,
   ProteinRestrictionWindow, ConsentGrant, SymptomLog stb.)
-- `lib/data/mock_data.dart` — mintaadatok a képernyők demonstrálásához
-- `lib/screens/` — a brief §4-ben felsorolt 11 képernyő
+- `lib/data/database/` — drift/SQLite séma, első indításkor lefutó
+  seed-adatok (`seed.dart`) és a generált `app_database.g.dart`
+- `lib/data/repository/` — reaktív (stream-alapú) repository-réteg a
+  gyógyszerekhez, ütemtervekhez, bevételi naplókhoz, gondozói
+  hozzájárulásokhoz és tünetnaplóhoz
+- `lib/data/mock_data.dart` — csak a statikus katalógustartalom (segédeszköz-
+  és edukációs listák), amelyek nem felhasználói adatok
+- `lib/screens/` — a brief §4-ben felsorolt 11 képernyő, a fenti
+  repository-rétegre kötve
 - `lib/theme/` — akadálymentes, nagy célterületű, magas kontrasztú téma,
   rendszerszintű szövegméretezés-támogatással
 
 ### Amit ez a vázlat szándékosan NEM tartalmaz még
 
-- Valódi helyi/perzisztens adattárolás és backend-szinkronizáció
+- Backend-szinkronizáció és többeszközös adatmegosztás
 - Tényleges helyi/push értesítés-ütemezés (iOS Critical Alerts, Android
-  exact alarm, eszkalációs állapotgép végrehajtása)
+  exact alarm, eszkalációs állapotgép végrehajtása) — az állapotgép és az
+  adatmodell megvan, de emlékeztető még nem tűzi ki magát
+  háttérfolyamatként
 - Hitelesítés és jogosultságkezelés (RBAC), audit log tényleges írása
 - Natív Wear OS / Apple Watch cél (a 11. képernyő csak telefonos előnézet)
+- Gyógyszer-ütemterv szerkesztő UI (az Add medication képernyő szándékosan
+  nem kér időpontokat, lásd brief §5 megjegyzés)
 
 ## Fejlesztői parancsok
 
