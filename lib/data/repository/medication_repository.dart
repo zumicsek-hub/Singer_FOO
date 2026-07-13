@@ -69,6 +69,14 @@ class MedicationRepository {
     );
   }
 
+  /// Létrehozza vagy felülírja egy gyógyszer napi bevételi időpontjait.
+  /// Ha ma már generálódtak naplóbejegyzések a régi időpontokra, de azok
+  /// még nincsenek visszaigazolva és a jövőben vannak, törli őket — az
+  /// [ensureTodayIntakeLogsGenerated] majd az új időpontok alapján pótolja.
+  /// A hívó felelőssége, hogy a törlés előtt lemondja a hozzájuk tartozó
+  /// már beütemezett OS-értesítéseket (lásd MedicationListScreen/
+  /// AddMedicationScreen — a repository-réteg szándékosan nem függ az
+  /// értesítési rétegtől).
   Future<void> setSchedule({
     required String medicationId,
     required List<DailyTime> dailyTimes,
@@ -111,6 +119,25 @@ class MedicationRepository {
             )),
       );
     });
+
+    final newTimesOfDay = dailyTimes.map((t) => t.hour * 60 + t.minute).toSet();
+    final now = DateTime.now();
+    final todayLogs = await (_db.select(_db.medicationIntakeLogs)
+          ..where((l) =>
+              l.medicationId.equals(medicationId) &
+              l.status.isIn([
+                IntakeStatus.scheduled.name,
+                IntakeStatus.notified.name,
+                IntakeStatus.snoozed.name,
+              ])))
+        .get();
+    for (final log in todayLogs) {
+      final matchesNewTime =
+          newTimesOfDay.contains(log.scheduledTime.hour * 60 + log.scheduledTime.minute);
+      if (log.scheduledTime.isAfter(now) && !matchesNewTime) {
+        await (_db.delete(_db.medicationIntakeLogs)..where((l) => l.id.equals(log.id))).go();
+      }
+    }
   }
 
   Stream<MedicationSchedule?> watchSchedule(String medicationId) {
@@ -124,6 +151,65 @@ class MedicationRepository {
           .get();
       return _scheduleFromRow(row, times);
     });
+  }
+
+  /// Egyszeri (nem reaktív) lekérdezés — szerkesztő képernyő előtöltéséhez.
+  Future<MedicationSchedule?> getSchedule(String medicationId) async {
+    final row = await (_db.select(_db.medicationSchedules)
+          ..where((t) => t.medicationId.equals(medicationId)))
+        .getSingleOrNull();
+    if (row == null) return null;
+    final times = await (_db.select(_db.medicationScheduleTimes)
+          ..where((t) => t.scheduleId.equals(row.id))
+          ..orderBy([(t) => OrderingTerm.asc(t.hour)]))
+        .get();
+    return _scheduleFromRow(row, times);
+  }
+
+  Future<void> updateMedication({
+    required String medicationId,
+    required String name,
+    required String dosage,
+    required MedicationForm form,
+    String? activeIngredient,
+    bool proteinRuleEnabled = false,
+    bool isRescueDose = false,
+    String? note,
+  }) {
+    return (_db.update(_db.medications)..where((t) => t.id.equals(medicationId)))
+        .write(db.MedicationsCompanion(
+      name: Value(name),
+      dosage: Value(dosage),
+      form: Value(form.name),
+      activeIngredient: Value(activeIngredient),
+      isParkinsonMedication: Value(proteinRuleEnabled || isRescueDose),
+      proteinRuleEnabled: Value(proteinRuleEnabled),
+      isRescueDose: Value(isRescueDose),
+      note: Value(note),
+    ));
+  }
+
+  /// Soft-delete: a gyógyszer inaktívvá válik, de a korábbi naplóbejegyzései
+  /// (előzmény, orvosi export) megmaradnak — nincs adatvesztés.
+  Future<void> deactivateMedication(String medicationId) {
+    return (_db.update(_db.medications)..where((t) => t.id.equals(medicationId)))
+        .write(const db.MedicationsCompanion(isActive: Value(false)));
+  }
+
+  /// A ma még lezáratlan (scheduled/notified/snoozed) naplóbejegyzések
+  /// azonosítói egy adott gyógyszerhez — szerkesztés/törlés előtt ezekhez
+  /// tartozó, már beütemezett OS-értesítéseket kell lemondani.
+  Future<List<String>> todayUnresolvedLogIdsForMedication(String medicationId) async {
+    final rows = await (_db.select(_db.medicationIntakeLogs)
+          ..where((l) =>
+              l.medicationId.equals(medicationId) &
+              l.status.isIn([
+                IntakeStatus.scheduled.name,
+                IntakeStatus.notified.name,
+                IntakeStatus.snoozed.name,
+              ])))
+        .get();
+    return rows.map((r) => r.id).toList();
   }
 
   Future<void> setProteinWindow({

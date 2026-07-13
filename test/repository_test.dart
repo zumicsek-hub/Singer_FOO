@@ -47,6 +47,42 @@ void main() {
         await repos.medications.watchTodayIntakeLogs(AppRepositories.patientId).first;
     expect(logsAfterSchedule.where((l) => l.medicationId == added.id).length, 2);
 
+    // Szerkesztés: mező-módosítás.
+    await repos.medications.updateMedication(
+      medicationId: added.id,
+      name: 'Teszt gyógyszer (átnevezve)',
+      dosage: '20 mg',
+      form: MedicationForm.capsule,
+    );
+    final medsAfterUpdate =
+        await repos.medications.watchActiveMedications(AppRepositories.patientId).first;
+    final updatedMed = medsAfterUpdate.firstWhere((m) => m.id == added.id);
+    expect(updatedMed.name, 'Teszt gyógyszer (átnevezve)');
+    expect(updatedMed.form, MedicationForm.capsule);
+
+    // Ütemterv cseréje egyetlen, gyakorlatilag mindig jövőbeli időpontra
+    // (23:59) — ellenőrizzük, hogy az újragenerálás létrehozza az új
+    // bejegyzést, a régi ütemterv-hozzárendelés eltűnése nélkül omlik össze
+    // a rendszer.
+    await repos.medications.setSchedule(
+      medicationId: added.id,
+      dailyTimes: const [DailyTime(23, 59)],
+    );
+    await repos.medications.ensureTodayIntakeLogsGenerated(AppRepositories.patientId);
+    final logsAfterReschedule =
+        await repos.medications.watchTodayIntakeLogs(AppRepositories.patientId).first;
+    expect(
+      logsAfterReschedule.any((l) =>
+          l.medicationId == added.id && l.scheduledTime.hour == 23 && l.scheduledTime.minute == 59),
+      isTrue,
+    );
+
+    // Törlés (soft-delete): a gyógyszer kikerül az aktív listából.
+    await repos.medications.deactivateMedication(added.id);
+    final medsAfterDelete =
+        await repos.medications.watchActiveMedications(AppRepositories.patientId).first;
+    expect(medsAfterDelete.any((m) => m.id == added.id), isFalse);
+
     await repos.caregivers.inviteCaregiver(
       patientId: AppRepositories.patientId,
       relationshipToPatient: 'Teszt gondozó',

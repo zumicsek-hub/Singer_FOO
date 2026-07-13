@@ -7,6 +7,7 @@ import '../theme/theme_controller.dart';
 import '../widgets/disclaimer_banner.dart';
 import '../widgets/section_card.dart';
 import 'caregiver_invite_screen.dart';
+import 'medication_list_screen.dart';
 import 'watch_intake_screen.dart';
 
 /// 10. Beállítások.
@@ -154,6 +155,20 @@ class SettingsScreen extends StatelessWidget {
                               ),
                             ],
                           ),
+                  ),
+                  const SizedBox(height: 16),
+                  SectionCard(
+                    title: 'Gyógyszereim',
+                    child: ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: const Icon(Icons.medication_outlined),
+                      title: const Text('Gyógyszerek kezelése'),
+                      subtitle: const Text('Szerkesztés, ütemezés, törlés'),
+                      trailing: const Icon(Icons.chevron_right),
+                      onTap: () => Navigator.of(context).push(
+                        MaterialPageRoute(builder: (_) => const MedicationListScreen()),
+                      ),
+                    ),
                   ),
                   const SizedBox(height: 16),
                   SectionCard(

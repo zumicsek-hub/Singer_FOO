@@ -45,7 +45,9 @@ nem lett kipróbálva.
 - `lib/data/mock_data.dart` — csak a statikus katalógustartalom (segédeszköz-
   és edukációs listák), amelyek nem felhasználói adatok
 - `lib/screens/` — a brief §4-ben felsorolt 11 képernyő, a fenti
-  repository- és értesítés-rétegre kötve
+  repository- és értesítés-rétegre kötve, plusz egy „Gyógyszereim"
+  lista-/szerkesztő képernyő (Beállításokból elérhető) meglévő gyógyszerek
+  szerkesztéséhez és törléséhez (soft-delete: az előzmények megmaradnak)
 - `lib/theme/` — akadálymentes, nagy célterületű, magas kontrasztú téma,
   rendszerszintű szövegméretezés-támogatással
 
@@ -65,10 +67,6 @@ nem lett kipróbálva.
   környezetben (nincs Xcode/macOS) nem lehetett biztonságosan szerkeszteni
 - Hitelesítés és jogosultságkezelés (RBAC), audit log tényleges írása
 - Natív Wear OS / Apple Watch cél (a 11. képernyő csak telefonos előnézet)
-- Meglévő gyógyszer szerkesztése/törlése (csak új gyógyszer hozzáadása és a
-  hozzá tartozó napi időpontok megadása működik; az Add medication
-  képernyőn a „Napi bevételi időpontok" szakasz mentéskor létrehozza az
-  ütemtervet, a mai naplóbejegyzéseket és az emlékeztető-értesítéseket is)
 
 ## Fejlesztői parancsok
 
