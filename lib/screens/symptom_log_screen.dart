@@ -6,6 +6,7 @@ import '../models/models.dart';
 import '../widgets/disclaimer_banner.dart';
 import '../widgets/primary_action_button.dart';
 import '../widgets/section_card.dart';
+import '../widgets/symptom_trend_chart.dart';
 
 extension MotorStateLabel on MotorState {
   String get label => switch (this) {
@@ -51,6 +52,24 @@ class SymptomLogScreen extends StatelessWidget {
                 text: 'A napló a dózisidők és a mozgásállapot közötti '
                     'összefüggés láthatóvá tételét szolgálja — nem diagnózis. '
                     'Mutasd meg a kezelőorvosodnak.',
+              ),
+              const SizedBox(height: 16),
+              StreamBuilder<List<SymptomLog>>(
+                stream: repos.symptoms.watchTodayLogs(AppRepositories.patientId),
+                builder: (context, todaySnapshot) {
+                  return StreamBuilder<List<MedicationIntakeLog>>(
+                    stream: repos.medications.watchTodayIntakeLogs(AppRepositories.patientId),
+                    builder: (context, intakeSnapshot) {
+                      return SectionCard(
+                        title: 'Mai idővonal',
+                        child: SymptomTrendChart(
+                          todaysLogs: todaySnapshot.data ?? const [],
+                          todaysIntakeLogs: intakeSnapshot.data ?? const [],
+                        ),
+                      );
+                    },
+                  );
+                },
               ),
               const SizedBox(height: 16),
               if (logs.isEmpty) const Text('Még nincs rögzített bejegyzés.'),

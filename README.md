@@ -21,9 +21,10 @@ A teljes termékspecifikációt lásd a fejlesztői briefben.
 
 **Fontos korlát:** ebben a fejlesztői környezetben nincs elérhető
 fizikai eszköz vagy emulátor, ezért az értesítés-kézbesítés (hangzás,
-műveletgombok, full-screen intent, Critical Alerts) csak forráskód-szinten
-lett ellenőrizve (`flutter analyze` + `flutter test`), valós eszközön még
-nem lett kipróbálva.
+műveletgombok, full-screen intent, Critical Alerts) és a diagramok tényleges
+vizuális megjelenése csak forráskód-szinten lett ellenőrizve
+(`flutter analyze` + `flutter test`), valós eszközön még nem lett
+kipróbálva.
 
 ### Amit ez a vázlat tartalmaz
 
@@ -55,6 +56,12 @@ nem lett kipróbálva.
   repository- és értesítés-rétegre kötve, plusz egy „Gyógyszereim"
   lista-/szerkesztő képernyő (Beállításokból elérhető) meglévő gyógyszerek
   szerkesztéséhez és törléséhez (soft-delete: az előzmények megmaradnak)
+- Tünet-/motoros napló idővonal-diagram (`lib/widgets/symptom_trend_chart.dart`,
+  fl_chart): a mai tremor-súlyosság alakulása a visszaigazolt
+  gyógyszerbevételek időpontjaival jelölve — a dózisidő és a motoros
+  állapot közötti összefüggés megjelenítése (brief §3.7 célja). A
+  diagramhoz szükséges adat-transzformáció tiszta, unit tesztelt
+  függvényekben él (`lib/data/charts/symptom_chart_data.dart`)
 - `lib/theme/` — akadálymentes, nagy célterületű, magas kontrasztú téma,
   rendszerszintű szövegméretezés-támogatással
 

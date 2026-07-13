@@ -16,6 +16,22 @@ class SymptomRepository {
     return query.watch().map((rows) => rows.map(_fromRow).toList());
   }
 
+  /// Csak a mai nap bejegyzései — a tünet-/dózisidő korrelációs diagramhoz
+  /// (brief §3.7), ahol a napon belüli órák szerinti elrendezés csak egy
+  /// napra értelmezhető konzisztensen.
+  Stream<List<SymptomLog>> watchTodayLogs(String patientId) {
+    final now = DateTime.now();
+    final dayStart = DateTime(now.year, now.month, now.day);
+    final dayEnd = dayStart.add(const Duration(days: 1));
+    final query = _db.select(_db.symptomLogs)
+      ..where((t) =>
+          t.patientId.equals(patientId) &
+          t.timestamp.isBiggerOrEqualValue(dayStart) &
+          t.timestamp.isSmallerThanValue(dayEnd))
+      ..orderBy([(t) => OrderingTerm.asc(t.timestamp)]);
+    return query.watch().map((rows) => rows.map(_fromRow).toList());
+  }
+
   Future<void> addLog(SymptomLog log) {
     return _db.into(_db.symptomLogs).insert(
           db.SymptomLogsCompanion.insert(
