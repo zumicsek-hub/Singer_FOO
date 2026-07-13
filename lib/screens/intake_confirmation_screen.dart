@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../data/repository_scope.dart';
 import '../models/models.dart';
+import '../notifications/notification_service.dart';
 import '../widgets/intake_status_view.dart';
 import '../widgets/primary_action_button.dart';
 
@@ -28,11 +29,27 @@ class _IntakeConfirmationScreenState extends State<IntakeConfirmationScreen> {
 
   Future<void> _setStatus(IntakeStatus status, String message) async {
     setState(() => _status = status);
-    await RepositoryScope.of(context).medications.updateIntakeStatus(
-          logId: widget.log.id,
-          status: status,
-          confirmedAt: status == IntakeStatus.confirmed ? DateTime.now() : null,
+    final repos = RepositoryScope.of(context);
+    await repos.medications.updateIntakeStatus(
+      logId: widget.log.id,
+      status: status,
+      confirmedAt: status == IntakeStatus.confirmed ? DateTime.now() : null,
+    );
+
+    if (status == IntakeStatus.snoozed && widget.medication != null) {
+      final preference =
+          await repos.patient.getNotificationPreference(widget.medication!.patientId);
+      if (preference != null) {
+        await NotificationService.instance.scheduleSnoozeReminder(
+          log: widget.log,
+          medication: widget.medication!,
+          preference: preference,
         );
+      }
+    } else {
+      await NotificationService.instance.cancelForIntakeLog(widget.log.id);
+    }
+
     if (!mounted) return;
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
@@ -95,7 +112,8 @@ class _IntakeConfirmationScreenState extends State<IntakeConfirmationScreen> {
                 foregroundColor: Theme.of(context).colorScheme.onErrorContainer,
                 onPressed: () => _setStatus(
                   IntakeStatus.escalatedToCaregiver,
-                  'Értesítettük a hozzátartozódat.',
+                  'Rögzítve: segítséget kértél. A gondozói értesítés kézbesítése '
+                  'a jelenlegi verzióban még nem valós idejű.',
                 ),
               ),
             ],

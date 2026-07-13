@@ -31,6 +31,24 @@ class CaregiverRepository {
         .toList());
   }
 
+  /// Egyszeri (nem reaktív) lekérdezés — indításkori egyeztetéshez, ahol
+  /// nincs szükség folyamatos figyelésre.
+  Future<List<CaregiverWithGrant>> getCaregivers(String patientId) async {
+    final query = _db.select(_db.consentGrants).join([
+      innerJoin(_db.caregiverProfiles,
+          _db.caregiverProfiles.id.equalsExp(_db.consentGrants.caregiverId)),
+    ])
+      ..where(_db.consentGrants.patientId.equals(patientId))
+      ..orderBy([OrderingTerm.asc(_db.consentGrants.grantedAt)]);
+    final rows = await query.get();
+    return rows
+        .map((row) => CaregiverWithGrant(
+              caregiver: _caregiverFromRow(row.readTable(_db.caregiverProfiles)),
+              grant: _grantFromRow(row.readTable(_db.consentGrants)),
+            ))
+        .toList();
+  }
+
   Future<void> inviteCaregiver({
     required String patientId,
     required String relationshipToPatient,

@@ -24,19 +24,23 @@ part 'app_database.g.dart';
   NotificationPreferences,
 ])
 class AppDatabase extends _$AppDatabase {
-  AppDatabase([QueryExecutor? executor]) : super(executor ?? _openConnection());
+  AppDatabase([QueryExecutor? executor]) : super(executor ?? openAppDatabaseConnection());
 
   @override
   int get schemaVersion => 1;
+}
 
-  static QueryExecutor _openConnection() {
-    return LazyDatabase(() async {
-      final dir = await getApplicationDocumentsDirectory();
-      final file = File(p.join(dir.path, 'parkinson_companion.sqlite'));
-      applyWorkaroundToOpenSqlite3OnOldAndroidVersions();
-      final cachebase = (await getTemporaryDirectory()).path;
-      sqlite3.tempDirectory = cachebase;
-      return NativeDatabase.createInBackground(file);
-    });
-  }
+/// Ugyanahhoz a lemezen lévő SQLite fájlhoz nyit kapcsolatot, amit a
+/// fő alkalmazás-példány használ. Külön isolate-ból (pl. a háttérben
+/// feldolgozott értesítés-válaszból, lásd notifications/background_handler.dart)
+/// is meghívható, hogy ugyanazt az adatbázist érje el.
+QueryExecutor openAppDatabaseConnection() {
+  return LazyDatabase(() async {
+    final dir = await getApplicationDocumentsDirectory();
+    final file = File(p.join(dir.path, 'parkinson_companion.sqlite'));
+    applyWorkaroundToOpenSqlite3OnOldAndroidVersions();
+    final cachebase = (await getTemporaryDirectory()).path;
+    sqlite3.tempDirectory = cachebase;
+    return NativeDatabase.createInBackground(file);
+  });
 }

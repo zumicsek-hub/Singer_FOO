@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../data/app_repositories.dart';
 import '../data/repository_scope.dart';
 import '../models/models.dart';
+import '../notifications/notification_service.dart';
 import '../theme/theme_controller.dart';
 import '../widgets/disclaimer_banner.dart';
 import '../widgets/section_card.dart';
@@ -114,7 +115,19 @@ class SettingsScreen extends StatelessWidget {
                                 title: const Text('iOS Critical Alerts'),
                                 subtitle: Text(pref.criticalAlertsGranted
                                     ? 'Engedélyezve'
-                                    : 'Nincs jóváhagyva — Apple engedélyezés szükséges'),
+                                    : 'Nincs jóváhagyva — Apple engedélyezés szükséges. '
+                                        'Koppints az engedélykéréshez.'),
+                                trailing: pref.criticalAlertsGranted ? null : const Icon(Icons.chevron_right),
+                                onTap: pref.criticalAlertsGranted
+                                    ? null
+                                    : () async {
+                                        final granted =
+                                            await NotificationService.instance.requestIosCriticalAlerts();
+                                        await repos.patient.updateNotificationCapabilities(
+                                          patientId,
+                                          criticalAlertsGranted: granted,
+                                        );
+                                      },
                               ),
                               ListTile(
                                 contentPadding: EdgeInsets.zero,
@@ -125,7 +138,19 @@ class SettingsScreen extends StatelessWidget {
                                 title: const Text('Android pontos ébresztés'),
                                 subtitle: Text(pref.exactAlarmGranted
                                     ? 'Engedélyezve'
-                                    : 'SCHEDULE_EXACT_ALARM engedély szükséges'),
+                                    : 'SCHEDULE_EXACT_ALARM engedély szükséges. '
+                                        'Koppints az engedélykéréshez.'),
+                                trailing: pref.exactAlarmGranted ? null : const Icon(Icons.chevron_right),
+                                onTap: pref.exactAlarmGranted
+                                    ? null
+                                    : () async {
+                                        final granted =
+                                            await NotificationService.instance.requestAndroidPermissions();
+                                        await repos.patient.updateNotificationCapabilities(
+                                          patientId,
+                                          exactAlarmGranted: granted,
+                                        );
+                                      },
                               ),
                             ],
                           ),

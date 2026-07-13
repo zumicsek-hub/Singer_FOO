@@ -27,6 +27,33 @@ class PatientRepository {
         .map((row) => row == null ? null : _notificationPreferenceFromRow(row));
   }
 
+  /// Egyszeri (nem reaktív) lekérdezés — indításkori egyeztetéshez és
+  /// értesítés-ütemezéshez, ahol nincs szükség folyamatos figyelésre.
+  Future<NotificationPreference?> getNotificationPreference(String patientId) async {
+    final row = await (_db.select(_db.notificationPreferences)
+          ..where((t) => t.patientId.equals(patientId)))
+        .getSingleOrNull();
+    return row == null ? null : _notificationPreferenceFromRow(row);
+  }
+
+  /// A ténylegesen megadott platform-engedélyek (brief §3.2: iOS Critical
+  /// Alerts, Android pontos ébresztés) állapotát menti el, miután a
+  /// felhasználó ténylegesen végigment a rendszer engedélykérő folyamatán.
+  Future<void> updateNotificationCapabilities(
+    String patientId, {
+    bool? criticalAlertsGranted,
+    bool? exactAlarmGranted,
+  }) {
+    return (_db.update(_db.notificationPreferences)..where((t) => t.patientId.equals(patientId)))
+        .write(db.NotificationPreferencesCompanion(
+      criticalAlertsGranted: criticalAlertsGranted == null
+          ? const Value.absent()
+          : Value(criticalAlertsGranted),
+      exactAlarmGranted:
+          exactAlarmGranted == null ? const Value.absent() : Value(exactAlarmGranted),
+    ));
+  }
+
   PatientProfile _profileFromRow(db.PatientProfile row) => PatientProfile(
         id: row.id,
         userId: row.userId,

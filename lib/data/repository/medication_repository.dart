@@ -19,6 +19,16 @@ class MedicationRepository {
     return query.watch().map((rows) => rows.map(_medicationFromRow).toList());
   }
 
+  /// Egyszeri (nem reaktív) lekérdezés — indításkori egyeztetéshez és
+  /// értesítés-ütemezéshez, ahol nincs szükség folyamatos figyelésre.
+  Future<List<Medication>> getActiveMedications(String patientId) async {
+    final query = _db.select(_db.medications)
+      ..where((t) => t.patientId.equals(patientId) & t.isActive.equals(true))
+      ..orderBy([(t) => OrderingTerm.asc(t.createdAt)]);
+    final rows = await query.get();
+    return rows.map(_medicationFromRow).toList();
+  }
+
   Future<Medication> addMedication({
     required String patientId,
     required String name,
@@ -206,6 +216,49 @@ class MedicationRepository {
     return query.watch().map((rows) => rows
         .map((row) => _intakeLogFromRow(row.readTable(_db.medicationIntakeLogs)))
         .toList());
+  }
+
+  /// Egyszeri (nem reaktív) lekérdezés — indításkori egyeztetéshez és
+  /// értesítés-ütemezéshez, ahol nincs szükség folyamatos figyelésre.
+  Future<List<MedicationIntakeLog>> getTodayIntakeLogs(String patientId) async {
+    final now = DateTime.now();
+    final dayStart = DateTime(now.year, now.month, now.day);
+    final dayEnd = dayStart.add(const Duration(days: 1));
+    final query = _db.select(_db.medicationIntakeLogs).join([
+      innerJoin(_db.medications, _db.medications.id.equalsExp(_db.medicationIntakeLogs.medicationId)),
+    ])
+      ..where(_db.medications.patientId.equals(patientId) &
+          _db.medicationIntakeLogs.scheduledTime.isBiggerOrEqualValue(dayStart) &
+          _db.medicationIntakeLogs.scheduledTime.isSmallerThanValue(dayEnd))
+      ..orderBy([OrderingTerm.asc(_db.medicationIntakeLogs.scheduledTime)]);
+    final rows = await query.get();
+    return rows.map((row) => _intakeLogFromRow(row.readTable(_db.medicationIntakeLogs))).toList();
+  }
+
+  /// Azok a bejegyzések, amelyek státusza még nem lezárt (scheduled/
+  /// notified/snoozed), és a tervezett időponttól számítva már legalább
+  /// [threshold] idő eltelt — az egyeztetési (reconciliation) lépéshez
+  /// (lásd AppRepositories.reconcileMissedIntakes és brief §7).
+  Future<List<MedicationIntakeLog>> overdueUnresolvedLogs(
+    String patientId,
+    Duration threshold,
+  ) async {
+    final unresolved = [
+      IntakeStatus.scheduled.name,
+      IntakeStatus.notified.name,
+      IntakeStatus.snoozed.name,
+    ];
+    final query = _db.select(_db.medicationIntakeLogs).join([
+      innerJoin(_db.medications, _db.medications.id.equalsExp(_db.medicationIntakeLogs.medicationId)),
+    ])
+      ..where(_db.medications.patientId.equals(patientId) &
+          _db.medicationIntakeLogs.status.isIn(unresolved));
+    final rows = await query.get();
+    final now = DateTime.now();
+    return rows
+        .map((row) => _intakeLogFromRow(row.readTable(_db.medicationIntakeLogs)))
+        .where((log) => now.difference(log.scheduledTime) >= threshold)
+        .toList();
   }
 
   Future<void> updateIntakeStatus({
